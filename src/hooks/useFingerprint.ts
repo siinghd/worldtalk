@@ -30,7 +30,6 @@ export function useFingerprint() {
       // Check localStorage first for consistency across sessions
       const stored = safeGetItem(STORAGE_KEY);
       if (stored && stored.length >= 10) {
-        console.log('[Fingerprint] Using stored ID:', stored.slice(0, 8) + '...');
         setVisitorId(stored);
         setIsLoading(false);
         return;
@@ -40,8 +39,6 @@ export function useFingerprint() {
         const fp = await FingerprintJS.load();
         const result = await fp.get();
         const id = result.visitorId;
-
-        console.log('[Fingerprint] Generated new ID:', id.slice(0, 8) + '...');
 
         // Store for future sessions
         safeSetItem(STORAGE_KEY, id);

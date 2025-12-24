@@ -253,7 +253,6 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
       features: userFeatures
     };
 
-    console.log('[Globe] Rendering users:', users.length, 'myId:', myId);
 
     // Add or update the source
     const source = m.getSource('users') as maplibregl.GeoJSONSource;
@@ -367,7 +366,6 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
         }
       });
 
-      console.log('[Globe] Added user layers to map');
 
       // Add click handler for other users (use refs to avoid stale closures)
       m.on('click', 'users-dots', (e) => {
@@ -375,10 +373,8 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
           const props = e.features[0].properties;
           // GeoJSON properties are serialized, so isMe becomes string
           const isMe = props.isMe === true || props.isMe === 'true';
-          console.log('[Globe] Clicked on user:', props.id, 'isMe:', isMe);
           if (!isMe && onUserClickRef.current) {
             const user = usersRef.current.find(u => u.visitorId === props.id);
-            console.log('[Globe] Found user:', user);
             if (user) onUserClickRef.current(user);
           }
         }

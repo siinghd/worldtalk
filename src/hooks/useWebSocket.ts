@@ -79,14 +79,12 @@ export function useWebSocket(visitorId: string | null) {
     }
 
     isConnectingRef.current = true;
-    console.log('[WS] Connecting to', getWsUrl());
 
     try {
       const ws = new WebSocket(getWsUrl());
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[WS] Connected');
         isConnectingRef.current = false;
         setConnected(true);
 
@@ -128,7 +126,6 @@ export function useWebSocket(visitorId: string | null) {
               break;
 
             case 'users':
-              console.log('[WS] Received users:', data.payload.length, data.payload);
               setUsers(data.payload);
               break;
 
@@ -179,7 +176,6 @@ export function useWebSocket(visitorId: string | null) {
       };
 
       ws.onclose = () => {
-        console.log('[WS] Disconnected');
         isConnectingRef.current = false;
         setConnected(false);
         wsRef.current = null;
