@@ -155,14 +155,8 @@ export async function removeUser(userId: string) {
 }
 
 export async function getAllUsers(): Promise<RedisUser[]> {
-  // Scan for all user keys
-  const keys: string[] = [];
-  let cursor = 0;
-  do {
-    const result = await pubClient.scan(cursor, { MATCH: `${USERS_KEY}:user:*`, COUNT: 100 });
-    cursor = result.cursor;
-    keys.push(...result.keys);
-  } while (cursor !== 0);
+  // Get all user keys (KEYS is fine for small datasets)
+  const keys = await pubClient.keys(`${USERS_KEY}:user:*`);
 
   if (keys.length === 0) return [];
 
