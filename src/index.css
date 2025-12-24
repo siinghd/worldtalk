@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+@theme {
+  --color-manga-yellow: #FFD700;
+  --color-manga-white: #FFFFFF;
+  --color-manga-black: #000000;
+  --color-manga-gray: #333333;
+
+  --font-family-manga: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+
+  --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-speed-lines: speedLines 0.5s ease-out;
+  --animate-bubble-appear: bubbleAppear 0.3s ease-out;
+  --animate-bubble-fade: bubbleFade 0.5s ease-in forwards;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes speedLines {
+    0% { opacity: 1; transform: scaleX(0); }
+    100% { opacity: 0; transform: scaleX(1); }
+  }
+
+  @keyframes bubbleAppear {
+    0% { opacity: 0; transform: scale(0.5); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes bubbleFade {
+    0% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-20px); }
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #000000;
+  color: #FFFFFF;
+  font-family: system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* Manga halftone pattern overlay */
+.manga-halftone {
+  background-image: radial-gradient(circle, #222 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Manga speech bubble */
+.manga-bubble {
+  position: relative;
+  background: #FFD700;
+  color: #000000;
+  border: 3px solid #000000;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-family: Impact, sans-serif;
+  font-weight: bold;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 #000000;
+}
+
+.manga-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 15px solid #FFD700;
+  filter: drop-shadow(2px 2px 0 #000000);
+}
+
+/* Speed lines effect */
+.speed-lines {
+  position: absolute;
+  pointer-events: none;
+}
+
+.speed-lines::before,
+.speed-lines::after {
+  content: '';
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, #FFD700 0%, transparent 100%);
+  animation: speedLines 0.5s ease-out;
+}
+
+/* Manga panel border */
+.manga-panel {
+  border: 3px solid #FFFFFF;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Stats display */
+.stats-display {
+  font-family: Impact, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Input styling */
+.manga-input {
+  background: #000000;
+  border: 3px solid #FFD700;
+  color: #FFD700;
+  font-family: Impact, sans-serif;
+  text-transform: uppercase;
+}
+
+.manga-input:focus {
+  outline: none;
+  box-shadow: 0 0 10px #FFD700;
+}
+
+.manga-input::placeholder {
+  color: #666;
+}
+
+/* Button styling */
+.manga-button {
+  background: #FFD700;
+  color: #000000;
+  border: 3px solid #000000;
+  font-family: Impact, sans-serif;
+  text-transform: uppercase;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  box-shadow: 4px 4px 0 #000000;
+}
+
+.manga-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #000000;
+}
+
+.manga-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000000;
+}
+
+/* Lock icon for encrypted messages */
+.lock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #333;
+  border: 2px solid #FFD700;
+  border-radius: 4px;
+}
+
+/* Canvas container */
+#globe-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+/* UI overlay */
+.ui-overlay {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ui-overlay > * {
+  pointer-events: auto;
+}
