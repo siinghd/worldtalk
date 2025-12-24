@@ -269,14 +269,11 @@ export function useWebSocket(visitorId: string | null) {
     return () => clearInterval(interval);
   }, []);
 
-  // Update ref when visitorId changes
-  useEffect(() => {
-    visitorIdRef.current = visitorId;
-  }, [visitorId]);
-
   // Connect when visitorId is available
   useEffect(() => {
     if (!visitorId) return;
+    // Update ref synchronously before connecting
+    visitorIdRef.current = visitorId;
     connect();
     return () => disconnect();
   }, [visitorId]); // Connect when visitorId becomes available
