@@ -40,6 +40,11 @@ export const subClient = pubClient.duplicate();
 export async function connectRedis() {
   await pubClient.connect();
   await subClient.connect();
+
+  // Clean up old hash-based user storage (migrating to individual keys with TTL)
+  await pubClient.del(`${USERS_KEY}:list`);
+  await pubClient.del(`${USERS_KEY}:online`);
+
   console.log('[Redis] Connected to Redis');
 }
 
@@ -129,21 +134,42 @@ export function subscribeToStats(callback: (stats: any) => void) {
   });
 }
 
-// User management via Redis
+// User management via Redis - using individual keys with TTL
+const USER_TTL = 30; // 30 seconds TTL per user
+
 export async function addUser(user: RedisUser) {
-  await pubClient.hSet(`${USERS_KEY}:list`, user.id, JSON.stringify(user));
-  await pubClient.expire(`${USERS_KEY}:list`, 120); // 2 min expiry
+  // Use individual key per user with TTL - auto-expires if not refreshed
+  await pubClient.setEx(`${USERS_KEY}:user:${user.id}`, USER_TTL, JSON.stringify(user));
   await publishUsersUpdate();
 }
 
+export async function refreshUser(userId: string) {
+  // Refresh the TTL without re-publishing (called periodically)
+  const key = `${USERS_KEY}:user:${userId}`;
+  await pubClient.expire(key, USER_TTL);
+}
+
 export async function removeUser(userId: string) {
-  await pubClient.hDel(`${USERS_KEY}:list`, userId);
+  await pubClient.del(`${USERS_KEY}:user:${userId}`);
   await publishUsersUpdate();
 }
 
 export async function getAllUsers(): Promise<RedisUser[]> {
-  const usersData = await pubClient.hGetAll(`${USERS_KEY}:list`);
-  return Object.values(usersData).map(data => JSON.parse(data) as RedisUser);
+  // Scan for all user keys
+  const keys: string[] = [];
+  let cursor = 0;
+  do {
+    const result = await pubClient.scan(cursor, { MATCH: `${USERS_KEY}:user:*`, COUNT: 100 });
+    cursor = result.cursor;
+    keys.push(...result.keys);
+  } while (cursor !== 0);
+
+  if (keys.length === 0) return [];
+
+  const values = await pubClient.mGet(keys);
+  return values
+    .filter((v): v is string => v !== null)
+    .map(data => JSON.parse(data) as RedisUser);
 }
 
 export async function publishUsersUpdate() {

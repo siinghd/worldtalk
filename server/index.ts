@@ -16,6 +16,7 @@ import {
   publishStatsUpdate,
   addUser,
   removeUser,
+  refreshUser,
   getAllUsers,
   incrementCityMessages,
   getLeaderboard,
@@ -205,10 +206,16 @@ async function start() {
     broadcastToClients({ type: 'leaderboard', payload: leaderboard });
   });
 
+  // Periodic stats update and user TTL refresh
   setInterval(async () => {
     await updateOnlineCount(clients.size, INSTANCE_ID);
     await publishStatsUpdate();
-  }, 5000);
+
+    // Refresh TTL for all connected users (keeps them alive in Redis)
+    for (const [clientId] of clients) {
+      await refreshUser(clientId);
+    }
+  }, 10000); // Every 10 seconds (TTL is 30s, so plenty of buffer)
 
   const server = Bun.serve({
     port: PORT,
