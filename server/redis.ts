@@ -137,10 +137,25 @@ export function subscribeToStats(callback: (stats: any) => void) {
 // User management via Redis - using individual keys with TTL
 const USER_TTL = 30; // 30 seconds TTL per user
 
+// Throttle user updates to avoid too many broadcasts
+let userUpdatePending = false;
+let userUpdateTimeout: Timer | null = null;
+
+function scheduleUsersUpdate() {
+  if (userUpdatePending) return;
+  userUpdatePending = true;
+
+  if (userUpdateTimeout) clearTimeout(userUpdateTimeout);
+  userUpdateTimeout = setTimeout(async () => {
+    userUpdatePending = false;
+    await publishUsersUpdate();
+  }, 500); // Batch updates within 500ms
+}
+
 export async function addUser(user: RedisUser) {
   // Use individual key per user with TTL - auto-expires if not refreshed
   await pubClient.setEx(`${USERS_KEY}:user:${user.id}`, USER_TTL, JSON.stringify(user));
-  await publishUsersUpdate();
+  scheduleUsersUpdate(); // Non-blocking, throttled
 }
 
 export async function refreshUser(userId: string) {
@@ -151,7 +166,7 @@ export async function refreshUser(userId: string) {
 
 export async function removeUser(userId: string) {
   await pubClient.del(`${USERS_KEY}:user:${userId}`);
-  await publishUsersUpdate();
+  scheduleUsersUpdate(); // Non-blocking, throttled
 }
 
 export async function getAllUsers(): Promise<RedisUser[]> {

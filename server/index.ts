@@ -279,7 +279,13 @@ async function start() {
           connectedAt: Date.now()
         });
 
-        // Track and notify
+        // Send welcome immediately with cached/estimated stats
+        ws.send(JSON.stringify({
+          type: 'welcome',
+          payload: { clientId, visitorId: fingerprint, stats: { usersOnline: clients.size, messagesThisMinute: 0, allTimeUsers: 0 }, location }
+        }));
+
+        // Track and sync in background (non-blocking)
         incrementAllTimeUsers(fingerprint);
         updateOnlineCount(clients.size, INSTANCE_ID);
 
@@ -295,23 +301,26 @@ async function start() {
         };
         addUser(redisUser);
 
-        // Send welcome with visitorId for client reference
-        getStats().then(async stats => {
-          ws.send(JSON.stringify({
-            type: 'welcome',
-            payload: { clientId, visitorId: fingerprint, stats, location }
-          }));
+        // Send updated data async
+        (async () => {
+          try {
+            // Send real stats
+            const stats = await getStats();
+            ws.send(JSON.stringify({ type: 'stats', payload: stats }));
 
-          // Send current user list from Redis
-          const allUsers = await getAllUsers();
-          ws.send(JSON.stringify({ type: 'users', payload: allUsers }));
+            // Send current user list from Redis
+            const allUsers = await getAllUsers();
+            ws.send(JSON.stringify({ type: 'users', payload: allUsers }));
 
-          // Send current leaderboard
-          const leaderboard = await getLeaderboard(10);
-          ws.send(JSON.stringify({ type: 'leaderboard', payload: leaderboard }));
+            // Send current leaderboard
+            const leaderboard = await getLeaderboard(10);
+            ws.send(JSON.stringify({ type: 'leaderboard', payload: leaderboard }));
 
-          publishStatsUpdate();
-        });
+            publishStatsUpdate();
+          } catch (e) {
+            // Client might have disconnected
+          }
+        })();
       },
 
       async message(ws, message) {
