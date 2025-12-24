@@ -518,6 +518,9 @@ function App() {
             <p className="text-[10px] sm:text-xs text-white/50 uppercase tracking-widest hidden sm:block">
               Watch the world speak
             </p>
+            <p className="text-[9px] sm:text-[10px] text-[#FFD700]/70 mt-1 hidden sm:block">
+              💬 Type to chat globally • Click a dot to DM privately
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

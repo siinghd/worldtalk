@@ -267,6 +267,20 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
         clusterRadius: 50
       });
 
+      // Cluster glow (add first, behind main circle)
+      m.addLayer({
+        id: 'users-clusters-glow',
+        type: 'circle',
+        source: 'users',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-radius': ['step', ['get', 'point_count'], 32, 5, 42, 10, 52],
+          'circle-color': '#FFD700',
+          'circle-opacity': 0.4,
+          'circle-blur': 0.8
+        }
+      });
+
       // Cluster circles - show count
       m.addLayer({
         id: 'users-clusters',
@@ -274,39 +288,30 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
         source: 'users',
         filter: ['has', 'point_count'],
         paint: {
-          'circle-radius': ['step', ['get', 'point_count'], 20, 5, 30, 10, 40],
-          'circle-color': '#FFD700',
+          'circle-radius': ['step', ['get', 'point_count'], 18, 5, 24, 10, 30],
+          'circle-color': '#000000',
           'circle-stroke-width': 3,
-          'circle-stroke-color': '#000000'
+          'circle-stroke-color': '#FFD700'
         }
       });
 
-      // Cluster glow
-      m.addLayer({
-        id: 'users-clusters-glow',
-        type: 'circle',
-        source: 'users',
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-radius': ['step', ['get', 'point_count'], 35, 5, 50, 10, 65],
-          'circle-color': '#FFD700',
-          'circle-opacity': 0.3,
-          'circle-blur': 1
-        }
-      }, 'users-clusters');
-
-      // Cluster count text
+      // Cluster count text with "users" label
       m.addLayer({
         id: 'users-cluster-count',
         type: 'symbol',
         source: 'users',
         filter: ['has', 'point_count'],
         layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-size': 14
+          'text-field': ['concat', ['get', 'point_count_abbreviated'], '\n👥'],
+          'text-size': 12,
+          'text-line-height': 1.1,
+          'text-anchor': 'center',
+          'text-justify': 'center'
         },
         paint: {
-          'text-color': '#000000'
+          'text-color': '#FFD700',
+          'text-halo-color': '#000000',
+          'text-halo-width': 1
         }
       });
 
