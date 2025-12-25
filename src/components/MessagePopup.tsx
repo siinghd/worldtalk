@@ -4,7 +4,7 @@ import type { ChatMessage } from '../hooks/useWebSocket';
 interface MessagePopupProps {
   message: ChatMessage;
   onClose: () => void;
-  onReply: (text: string, replyToId: string) => void;
+  onReply: (text: string, replyToMessage: ChatMessage) => void;
 }
 
 export function MessagePopup({ message, onClose, onReply }: MessagePopupProps) {
@@ -20,7 +20,7 @@ export function MessagePopup({ message, onClose, onReply }: MessagePopupProps) {
 
   const handleReply = () => {
     if (replyText.trim()) {
-      onReply(replyText.trim(), message.id);
+      onReply(replyText.trim(), message);
       setReplyText('');
       setShowReplyInput(false);
       onClose();

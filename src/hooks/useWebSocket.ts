@@ -217,7 +217,7 @@ export function useWebSocket(visitorId: string | null) {
     isConnectingRef.current = false;
   }, []);
 
-  const sendMessage = useCallback((text: string, encrypted = false, encryptedFor?: string, replyTo?: string) => {
+  const sendMessage = useCallback((text: string, encrypted = false, encryptedFor?: string, replyContext?: { replyTo: string; replyToText: string; replyToLat: number; replyToLng: number }) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(JSON.stringify({
@@ -225,7 +225,7 @@ export function useWebSocket(visitorId: string | null) {
       text,
       encrypted,
       encryptedFor,
-      replyTo
+      ...replyContext // Spread reply context if provided
     }));
   }, []);
 

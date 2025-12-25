@@ -488,8 +488,13 @@ function App() {
     }
   }, []);
 
-  const handleReply = useCallback((text: string, replyToId: string) => {
-    sendMessage(text, false, undefined, replyToId);
+  const handleReply = useCallback((text: string, replyToMessage: ChatMessage) => {
+    sendMessage(text, false, undefined, {
+      replyTo: replyToMessage.id,
+      replyToText: replyToMessage.text,
+      replyToLat: replyToMessage.lat,
+      replyToLng: replyToMessage.lng
+    });
   }, [sendMessage]);
 
   const handleNotificationOpen = useCallback(() => {
