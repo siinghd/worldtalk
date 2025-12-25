@@ -45,16 +45,6 @@ export interface LeaderboardEntry {
   messageCount: number;
 }
 
-export interface SpinGame {
-  id: string;
-  hostId: string;
-  hostName: string;
-  participants: { id: string; name: string }[];
-  status: 'waiting' | 'spinning' | 'result';
-  result?: { oderId: string; winnerName: string; prize: string };
-  startedAt: number;
-}
-
 export function useWebSocket(visitorId: string | null) {
   const [connected, setConnected] = useState(false);
   const [stats, setStats] = useState<Stats>({ usersOnline: 0, messagesThisMinute: 0, allTimeUsers: 0 });
@@ -66,7 +56,6 @@ export function useWebSocket(visitorId: string | null) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [newReaction, setNewReaction] = useState<Reaction | null>(null);
-  const [spinGame, setSpinGame] = useState<SpinGame | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -180,10 +169,6 @@ export function useWebSocket(visitorId: string | null) {
 
             case 'pong':
               break;
-
-            case 'spin_game':
-              setSpinGame(data.payload);
-              break;
           }
         } catch (e) {
           console.error('[WS] Parse error:', e);
@@ -271,32 +256,6 @@ export function useWebSocket(visitorId: string | null) {
     }));
   }, []);
 
-  const createSpinGame = useCallback((hostName: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
-    wsRef.current.send(JSON.stringify({
-      type: 'spin_create',
-      hostName
-    }));
-  }, []);
-
-  const joinSpinGame = useCallback((playerName: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
-    wsRef.current.send(JSON.stringify({
-      type: 'spin_join',
-      playerName
-    }));
-  }, []);
-
-  const startSpinGame = useCallback(() => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
-    wsRef.current.send(JSON.stringify({
-      type: 'spin_start'
-    }));
-  }, []);
-
   // Cleanup expired typing users
   useEffect(() => {
     const interval = setInterval(() => {
@@ -339,13 +298,9 @@ export function useWebSocket(visitorId: string | null) {
     leaderboard,
     typingUsers,
     newReaction,
-    spinGame,
     sendMessage,
     updateLocation,
     sendTyping,
-    sendReaction,
-    createSpinGame,
-    joinSpinGame,
-    startSpinGame
+    sendReaction
   };
 }
