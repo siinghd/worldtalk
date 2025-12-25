@@ -17,6 +17,7 @@ interface GlobeProps {
   users: OnlineUser[];
   myId: string | null;
   onUserClick?: (user: OnlineUser) => void;
+  onMessageClick?: (message: ChatMessage) => void;
   typingUsers?: TypingUser[];
   newReaction?: Reaction | null;
 }
@@ -60,25 +61,30 @@ function getNickname(id: string): string {
   return `${ADJECTIVES[adjIndex]} ${ANIMALS[animalIndex]} #${shortId}`;
 }
 
-export function Globe({ messages, users, myId, onUserClick, typingUsers = [], newReaction }: GlobeProps) {
+export function Globe({ messages, users, myId, onUserClick, onMessageClick, typingUsers = [], newReaction }: GlobeProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const messageMarkersRef = useRef<Map<string, { marker: maplibregl.Marker; timestamp: number }>>(new Map());
+  const messageMarkersRef = useRef<Map<string, { marker: maplibregl.Marker; timestamp: number; message: ChatMessage }>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
   const hasFlownToUser = useRef(false);
   const arcCounterRef = useRef(0);
   const typingMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const reactionMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const replyLinesRef = useRef<Map<string, string>>(new Map()); // messageId -> lineId
 
   // Refs to avoid stale closures in event handlers
   const usersRef = useRef<OnlineUser[]>(users);
   const onUserClickRef = useRef(onUserClick);
+  const onMessageClickRef = useRef(onMessageClick);
+  const messagesRef = useRef<ChatMessage[]>(messages);
 
   // Keep refs in sync
   useEffect(() => {
     usersRef.current = users;
     onUserClickRef.current = onUserClick;
-  }, [users, onUserClick]);
+    onMessageClickRef.current = onMessageClick;
+    messagesRef.current = messages;
+  }, [users, onUserClick, onMessageClick, messages]);
 
   // Function to animate a line between two points
   const animateMessageLine = (
@@ -161,6 +167,66 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
         });
       }
     }, 20);
+  };
+
+  // Function to draw a persistent reply connection line
+  const drawReplyLine = (
+    messageId: string,
+    fromLng: number,
+    fromLat: number,
+    toLng: number,
+    toLat: number
+  ) => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+    const lineId = `reply-line-${messageId}`;
+    const linePoints = createLine([fromLng, fromLat], [toLng, toLat], 20);
+
+    // Check if line already exists
+    if (m.getSource(lineId)) return;
+
+    // Store the line ID for cleanup
+    replyLinesRef.current.set(messageId, lineId);
+
+    // Add source for the line
+    m.addSource(lineId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: linePoints
+        }
+      }
+    });
+
+    // Add dashed line layer
+    m.addLayer({
+      id: `${lineId}-line`,
+      type: 'line',
+      source: lineId,
+      paint: {
+        'line-color': '#00FFFF',
+        'line-width': 2,
+        'line-opacity': 0.7,
+        'line-dasharray': [2, 2]
+      }
+    });
+  };
+
+  // Function to remove a reply line
+  const removeReplyLine = (messageId: string) => {
+    if (!map.current) return;
+
+    const m = map.current;
+    const lineId = replyLinesRef.current.get(messageId);
+    if (!lineId) return;
+
+    if (m.getLayer(`${lineId}-line`)) m.removeLayer(`${lineId}-line`);
+    if (m.getSource(lineId)) m.removeSource(lineId);
+    replyLinesRef.current.delete(messageId);
   };
 
   // Initialize map
@@ -497,7 +563,8 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
 
       messageMarkersRef.current.set(latestMessage.id, {
         marker,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        message: latestMessage
       });
 
       // DMs fade faster
@@ -523,9 +590,38 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
     // Create broadcast message bubble
     const el = document.createElement('div');
     el.className = 'message-bubble';
+    el.style.cursor = 'pointer';
+
+    // If this is a reply, add reply indicator
+    if (latestMessage.replyTo && latestMessage.replyToText) {
+      const replyIndicator = document.createElement('div');
+      replyIndicator.className = 'reply-indicator';
+      replyIndicator.textContent = `↩ ${latestMessage.replyToText.slice(0, 30)}${latestMessage.replyToText.length > 30 ? '...' : ''}`;
+      el.appendChild(replyIndicator);
+
+      // Draw connection line to parent message if it exists on the map
+      if (latestMessage.replyToLat !== undefined && latestMessage.replyToLng !== undefined) {
+        drawReplyLine(
+          latestMessage.id,
+          latestMessage.lng,
+          latestMessage.lat,
+          latestMessage.replyToLng,
+          latestMessage.replyToLat
+        );
+      }
+    }
+
     const textSpan = document.createElement('span');
     textSpan.textContent = latestMessage.text; // Safe: textContent escapes HTML
     el.appendChild(textSpan);
+
+    // Add click handler
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (onMessageClickRef.current) {
+        onMessageClickRef.current(latestMessage);
+      }
+    });
 
     const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
       .setLngLat([latestMessage.lng, latestMessage.lat])
@@ -533,7 +629,8 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
 
     messageMarkersRef.current.set(latestMessage.id, {
       marker,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      message: latestMessage
     });
 
     // Fade out and remove after 30 seconds
@@ -544,6 +641,8 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
     setTimeout(() => {
       marker.remove();
       messageMarkersRef.current.delete(latestMessage.id);
+      // Also remove the reply line if exists
+      removeReplyLine(latestMessage.id);
     }, 30000);
 
   }, [messages, mapLoaded, users, myId]);
@@ -910,6 +1009,23 @@ export function Globe({ messages, users, myId, onUserClick, typingUsers = [], ne
           font-size: 10px;
           opacity: 0.8;
           display: block;
+        }
+
+        .reply-indicator {
+          font-size: 10px;
+          color: #000;
+          opacity: 0.7;
+          padding-bottom: 4px;
+          margin-bottom: 4px;
+          border-bottom: 1px solid rgba(0,0,0,0.2);
+          text-transform: none;
+          font-family: 'Noto Sans', sans-serif;
+          font-style: italic;
+        }
+
+        .message-bubble:hover {
+          transform: scale(1.05);
+          box-shadow: 6px 6px 0 #000;
         }
 
         .message-bubble .encrypted {

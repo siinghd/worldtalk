@@ -141,6 +141,23 @@ interface Client {
 
 const clients = new Map<string, Client>();
 
+// Cache of recent messages for reply lookups (30 second TTL matches bubble lifetime)
+const recentMessages = new Map<string, { text: string; lat: number; lng: number; timestamp: number }>();
+const MESSAGE_TTL = 35000; // 35 seconds (slightly longer than bubble fade)
+
+function cacheMessage(id: string, text: string, lat: number, lng: number) {
+  recentMessages.set(id, { text, lat, lng, timestamp: Date.now() });
+}
+
+function cleanupOldMessages() {
+  const now = Date.now();
+  for (const [id, msg] of recentMessages) {
+    if (now - msg.timestamp > MESSAGE_TTL) {
+      recentMessages.delete(id);
+    }
+  }
+}
+
 // Hono app for HTTP routes
 const app = new Hono();
 app.use('*', cors());
@@ -210,6 +227,7 @@ async function start() {
   setInterval(async () => {
     await updateOnlineCount(clients.size, INSTANCE_ID);
     await publishStatsUpdate();
+    cleanupOldMessages(); // Clean expired message cache
 
     // Refresh TTL for all connected users (keeps them alive in Redis)
     for (const [clientId] of clients) {
@@ -357,6 +375,20 @@ async function start() {
                 senderFingerprint: client.fingerprint,
                 instanceId: INSTANCE_ID
               };
+
+              // Handle reply context
+              if (data.replyTo && typeof data.replyTo === 'string') {
+                const parentMsg = recentMessages.get(data.replyTo);
+                if (parentMsg) {
+                  (broadcastMsg as any).replyTo = data.replyTo;
+                  (broadcastMsg as any).replyToText = parentMsg.text.slice(0, 50);
+                  (broadcastMsg as any).replyToLat = parentMsg.lat;
+                  (broadcastMsg as any).replyToLng = parentMsg.lng;
+                }
+              }
+
+              // Cache this message for future replies
+              cacheMessage(broadcastMsg.id, safeText, client.location.lat, client.location.lng);
 
               await publishMessage(broadcastMsg);
               broadcastToClients({ type: 'message', payload: broadcastMsg });

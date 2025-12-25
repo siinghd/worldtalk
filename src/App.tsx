@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Globe, type OnlineUser } from './components/Globe';
 import { ChatInput } from './components/ChatInput';
 import { LiveStats } from './components/LiveStats';
+import { MessagePopup } from './components/MessagePopup';
 import { useWebSocket, type ChatMessage, type LeaderboardEntry } from './hooks/useWebSocket';
 import { useFingerprint } from './hooks/useFingerprint';
 import { playMessageSound, playDMSound, playReactionSound, getDistance } from './utils/sounds';
@@ -343,6 +344,7 @@ function DMSidebar({
 
 function App() {
   const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
   const [notification, setNotification] = useState<{ message: ChatMessage; sender: OnlineUser | undefined } | null>(null);
   const [readMessages, setReadMessages] = useState<Set<string>>(new Set());
   const [showChats, setShowChats] = useState(false);
@@ -479,6 +481,17 @@ function App() {
     }
   }, [sendMessage, selectedUser]);
 
+  const handleMessageClick = useCallback((message: ChatMessage) => {
+    // Don't show popup for encrypted DMs
+    if (!message.encrypted) {
+      setSelectedMessage(message);
+    }
+  }, []);
+
+  const handleReply = useCallback((text: string, replyToId: string) => {
+    sendMessage(text, false, undefined, replyToId);
+  }, [sendMessage]);
+
   const handleNotificationOpen = useCallback(() => {
     if (notification?.sender) {
       setSelectedUser(notification.sender);
@@ -495,6 +508,7 @@ function App() {
         users={users}
         myId={myVisitorId}
         onUserClick={handleUserClick}
+        onMessageClick={handleMessageClick}
         typingUsers={typingUsers}
         newReaction={newReaction}
       />
@@ -505,6 +519,14 @@ function App() {
           sender={notification.sender}
           onOpen={handleNotificationOpen}
           onDismiss={() => setNotification(null)}
+        />
+      )}
+
+      {selectedMessage && (
+        <MessagePopup
+          message={selectedMessage}
+          onClose={() => setSelectedMessage(null)}
+          onReply={handleReply}
         />
       )}
 

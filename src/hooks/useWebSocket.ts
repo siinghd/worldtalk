@@ -12,6 +12,11 @@ export interface ChatMessage {
   senderId: string; // sender's user ID
   senderFingerprint: string;
   reactions?: { [emoji: string]: number };
+  // Reply fields
+  replyTo?: string;        // ID of parent message being replied to
+  replyToText?: string;    // Preview of parent message (first 50 chars)
+  replyToLat?: number;     // Location of parent message (for drawing connection)
+  replyToLng?: number;
 }
 
 export interface Reaction {
@@ -212,14 +217,15 @@ export function useWebSocket(visitorId: string | null) {
     isConnectingRef.current = false;
   }, []);
 
-  const sendMessage = useCallback((text: string, encrypted = false, encryptedFor?: string) => {
+  const sendMessage = useCallback((text: string, encrypted = false, encryptedFor?: string, replyTo?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(JSON.stringify({
       type: 'message',
       text,
       encrypted,
-      encryptedFor
+      encryptedFor,
+      replyTo
     }));
   }, []);
 
