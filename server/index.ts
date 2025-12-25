@@ -55,6 +55,20 @@ function checkRateLimit(clientId: string, type: 'messages' | 'typing'): boolean 
   return true;
 }
 
+// Spin Game State
+interface SpinGame {
+  id: string;
+  hostId: string;
+  hostName: string;
+  participants: { id: string; name: string }[];
+  status: 'waiting' | 'spinning' | 'result';
+  result?: { oderId: string; winnerName: string; prize: string };
+  startedAt: number;
+}
+
+const PRIZES = ['TRUTH', 'DARE', 'SKIP', 'DRINK', 'DANCE', 'SING', 'JOKE', 'SECRET'];
+let currentSpinGame: SpinGame | null = null;
+
 // Input validation
 const VALID_EMOJI_REGEX = /^[\p{Emoji}]{1,2}$/u;
 const VALID_VISITOR_ID_REGEX = /^[a-zA-Z0-9]{10,32}$/;
@@ -443,6 +457,93 @@ async function start() {
                   }
                 });
               }
+              break;
+            }
+
+            case 'spin_create': {
+              // Create a new spin game
+              if (currentSpinGame && currentSpinGame.status !== 'result') {
+                ws.send(JSON.stringify({ type: 'error', message: 'A game is already in progress' }));
+                return;
+              }
+
+              const hostName = data.hostName || `Player ${client.fingerprint.slice(0, 4)}`;
+              currentSpinGame = {
+                id: crypto.randomUUID(),
+                hostId: client.fingerprint,
+                hostName,
+                participants: [{ id: client.fingerprint, name: hostName }],
+                status: 'waiting',
+                startedAt: Date.now()
+              };
+
+              broadcastToClients({ type: 'spin_game', payload: currentSpinGame });
+
+              // Auto-expire game after 30 seconds if not started
+              setTimeout(() => {
+                if (currentSpinGame?.id === currentSpinGame?.id && currentSpinGame?.status === 'waiting') {
+                  currentSpinGame = null;
+                  broadcastToClients({ type: 'spin_game', payload: null });
+                }
+              }, 30000);
+              break;
+            }
+
+            case 'spin_join': {
+              if (!currentSpinGame || currentSpinGame.status !== 'waiting') {
+                ws.send(JSON.stringify({ type: 'error', message: 'No game to join' }));
+                return;
+              }
+
+              // Check if already joined
+              if (currentSpinGame.participants.some(p => p.id === client.fingerprint)) {
+                return;
+              }
+
+              const playerName = data.playerName || `Player ${client.fingerprint.slice(0, 4)}`;
+              currentSpinGame.participants.push({ id: client.fingerprint, name: playerName });
+              broadcastToClients({ type: 'spin_game', payload: currentSpinGame });
+              break;
+            }
+
+            case 'spin_start': {
+              if (!currentSpinGame || currentSpinGame.status !== 'waiting') {
+                ws.send(JSON.stringify({ type: 'error', message: 'No game to start' }));
+                return;
+              }
+
+              // Only host can start
+              if (currentSpinGame.hostId !== client.fingerprint) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Only host can start' }));
+                return;
+              }
+
+              if (currentSpinGame.participants.length < 1) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Need at least 1 player' }));
+                return;
+              }
+
+              // Pick random winner and prize
+              const winner = currentSpinGame.participants[Math.floor(Math.random() * currentSpinGame.participants.length)];
+              const prize = PRIZES[Math.floor(Math.random() * PRIZES.length)];
+
+              currentSpinGame.status = 'spinning';
+              currentSpinGame.result = { oderId: winner.id, winnerName: winner.name, prize };
+              broadcastToClients({ type: 'spin_game', payload: currentSpinGame });
+
+              // After spin animation, show result
+              setTimeout(() => {
+                if (currentSpinGame) {
+                  currentSpinGame.status = 'result';
+                  broadcastToClients({ type: 'spin_game', payload: currentSpinGame });
+
+                  // Clear game after 10 seconds
+                  setTimeout(() => {
+                    currentSpinGame = null;
+                    broadcastToClients({ type: 'spin_game', payload: null });
+                  }, 10000);
+                }
+              }, 4000);
               break;
             }
           }

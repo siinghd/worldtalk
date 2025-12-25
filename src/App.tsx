@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Globe, type OnlineUser } from './components/Globe';
 import { ChatInput } from './components/ChatInput';
 import { LiveStats } from './components/LiveStats';
+import { SpinWheel } from './components/SpinWheel';
 import { useWebSocket, type ChatMessage, type LeaderboardEntry } from './hooks/useWebSocket';
 import { useFingerprint } from './hooks/useFingerprint';
 import { playMessageSound, playDMSound, playReactionSound, getDistance } from './utils/sounds';
@@ -370,9 +371,15 @@ function App() {
     leaderboard,
     typingUsers,
     newReaction,
+    spinGame,
     sendMessage,
-    sendTyping
+    sendTyping,
+    createSpinGame,
+    joinSpinGame,
+    startSpinGame
   } = useWebSocket(visitorId);
+
+  const [showSpinWheel, setShowSpinWheel] = useState(false);
 
   // Build conversations list from messages (using visitorId for stable matching)
   const conversations = useMemo(() => {
@@ -508,6 +515,17 @@ function App() {
         />
       )}
 
+      {/* Spin Wheel Game */}
+      {(showSpinWheel || spinGame) && (
+        <SpinWheel
+          game={spinGame}
+          myId={myVisitorId}
+          onJoin={() => joinSpinGame(`Player ${myVisitorId?.slice(0, 4)}`)}
+          onStart={startSpinGame}
+          onClose={() => setShowSpinWheel(false)}
+        />
+      )}
+
       <div className="ui-overlay">
         {/* Header */}
         <div className="fixed top-0 left-0 right-0 p-3 sm:p-4 flex justify-between items-start safe-area-top z-30">
@@ -525,6 +543,22 @@ function App() {
 
           <div className="flex items-center gap-2">
             <LiveStats stats={stats} connected={connected} />
+            {/* Desktop Spin Button */}
+            <button
+              onClick={() => {
+                if (!spinGame) {
+                  createSpinGame(`Player ${myVisitorId?.slice(0, 4)}`);
+                }
+                setShowSpinWheel(true);
+              }}
+              className="hidden sm:flex p-2 rounded-lg bg-black/50 backdrop-blur-sm border border-white/20 hover:border-[#FFD700] hover:bg-black/70 transition-all relative"
+              title="Spin the Wheel"
+            >
+              <span className="text-xl">🎰</span>
+              {spinGame && spinGame.status === 'waiting' && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#FFD700] animate-pulse" />
+              )}
+            </button>
             <a
               href="https://github.com/siinghd/worldtalk"
               target="_blank"
@@ -565,6 +599,22 @@ function App() {
               >
                 <span className="text-lg">🏆</span>
                 <span className="text-xs font-medium">Top 10</span>
+              </button>
+              <div className="w-px bg-[#FFD700]/30" />
+              <button
+                onClick={() => {
+                  if (!spinGame) {
+                    createSpinGame(`Player ${myVisitorId?.slice(0, 4)}`);
+                  }
+                  setShowSpinWheel(true);
+                }}
+                className="flex-1 py-2 flex items-center justify-center gap-2 text-white active:bg-white/10 relative"
+              >
+                <span className="text-lg">🎰</span>
+                <span className="text-xs font-medium">Spin</span>
+                {spinGame && spinGame.status === 'waiting' && (
+                  <span className="absolute top-1 right-1/4 w-2 h-2 rounded-full bg-[#FFD700] animate-pulse" />
+                )}
               </button>
             </div>
           </div>
