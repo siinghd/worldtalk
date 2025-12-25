@@ -70,7 +70,6 @@ export function Globe({ messages, users, myId, onUserClick, onMessageClick, typi
   const arcCounterRef = useRef(0);
   const typingMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const reactionMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const replyLinesRef = useRef<Map<string, string>>(new Map()); // messageId -> lineId
 
   // Refs to avoid stale closures in event handlers
   const usersRef = useRef<OnlineUser[]>(users);
@@ -167,66 +166,6 @@ export function Globe({ messages, users, myId, onUserClick, onMessageClick, typi
         });
       }
     }, 20);
-  };
-
-  // Function to draw a persistent reply connection line
-  const drawReplyLine = (
-    messageId: string,
-    fromLng: number,
-    fromLat: number,
-    toLng: number,
-    toLat: number
-  ) => {
-    if (!map.current || !mapLoaded) return;
-
-    const m = map.current;
-    const lineId = `reply-line-${messageId}`;
-    const linePoints = createLine([fromLng, fromLat], [toLng, toLat], 20);
-
-    // Check if line already exists
-    if (m.getSource(lineId)) return;
-
-    // Store the line ID for cleanup
-    replyLinesRef.current.set(messageId, lineId);
-
-    // Add source for the line
-    m.addSource(lineId, {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: linePoints
-        }
-      }
-    });
-
-    // Add dashed line layer
-    m.addLayer({
-      id: `${lineId}-line`,
-      type: 'line',
-      source: lineId,
-      paint: {
-        'line-color': '#00FFFF',
-        'line-width': 2,
-        'line-opacity': 0.7,
-        'line-dasharray': [2, 2]
-      }
-    });
-  };
-
-  // Function to remove a reply line
-  const removeReplyLine = (messageId: string) => {
-    if (!map.current) return;
-
-    const m = map.current;
-    const lineId = replyLinesRef.current.get(messageId);
-    if (!lineId) return;
-
-    if (m.getLayer(`${lineId}-line`)) m.removeLayer(`${lineId}-line`);
-    if (m.getSource(lineId)) m.removeSource(lineId);
-    replyLinesRef.current.delete(messageId);
   };
 
   // Initialize map
@@ -587,29 +526,62 @@ export function Globe({ messages, users, myId, onUserClick, onMessageClick, typi
       );
     }
 
-    // Create broadcast message bubble
+    // If this is a reply, create stacked bubble structure
+    if (latestMessage.replyTo && latestMessage.replyToText) {
+      const container = document.createElement('div');
+      container.className = 'reply-stack';
+      container.style.cursor = 'pointer';
+
+      // Original message bubble (on top, smaller)
+      const originalBubble = document.createElement('div');
+      originalBubble.className = 'message-bubble original-bubble';
+      originalBubble.textContent = latestMessage.replyToText.slice(0, 40) + (latestMessage.replyToText.length > 40 ? '...' : '');
+
+      // Connector
+      const connector = document.createElement('div');
+      connector.className = 'reply-connector';
+
+      // Reply bubble (below, full size)
+      const replyBubble = document.createElement('div');
+      replyBubble.className = 'message-bubble reply-bubble';
+      replyBubble.textContent = latestMessage.text;
+
+      container.appendChild(originalBubble);
+      container.appendChild(connector);
+      container.appendChild(replyBubble);
+
+      // Add click handler
+      container.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onMessageClickRef.current) {
+          onMessageClickRef.current(latestMessage);
+        }
+      });
+
+      const marker = new maplibregl.Marker({ element: container, anchor: 'bottom' })
+        .setLngLat([latestMessage.lng, latestMessage.lat])
+        .addTo(map.current);
+
+      messageMarkersRef.current.set(latestMessage.id, {
+        marker,
+        timestamp: Date.now(),
+        message: latestMessage
+      });
+
+      // Fade out and remove after 30 seconds
+      setTimeout(() => container.classList.add('fade-out'), 25000);
+      setTimeout(() => {
+        marker.remove();
+        messageMarkersRef.current.delete(latestMessage.id);
+      }, 30000);
+
+      return;
+    }
+
+    // Create regular broadcast message bubble
     const el = document.createElement('div');
     el.className = 'message-bubble';
     el.style.cursor = 'pointer';
-
-    // If this is a reply, add reply indicator
-    if (latestMessage.replyTo && latestMessage.replyToText) {
-      const replyIndicator = document.createElement('div');
-      replyIndicator.className = 'reply-indicator';
-      replyIndicator.textContent = `↩ ${latestMessage.replyToText.slice(0, 30)}${latestMessage.replyToText.length > 30 ? '...' : ''}`;
-      el.appendChild(replyIndicator);
-
-      // Draw connection line to parent message if it exists on the map
-      if (latestMessage.replyToLat !== undefined && latestMessage.replyToLng !== undefined) {
-        drawReplyLine(
-          latestMessage.id,
-          latestMessage.lng,
-          latestMessage.lat,
-          latestMessage.replyToLng,
-          latestMessage.replyToLat
-        );
-      }
-    }
 
     const textSpan = document.createElement('span');
     textSpan.textContent = latestMessage.text; // Safe: textContent escapes HTML
@@ -641,8 +613,6 @@ export function Globe({ messages, users, myId, onUserClick, onMessageClick, typi
     setTimeout(() => {
       marker.remove();
       messageMarkersRef.current.delete(latestMessage.id);
-      // Also remove the reply line if exists
-      removeReplyLine(latestMessage.id);
     }, 30000);
 
   }, [messages, mapLoaded, users, myId]);
@@ -1011,16 +981,44 @@ export function Globe({ messages, users, myId, onUserClick, onMessageClick, typi
           display: block;
         }
 
-        .reply-indicator {
-          font-size: 10px;
-          color: #000;
-          opacity: 0.7;
-          padding-bottom: 4px;
-          margin-bottom: 4px;
-          border-bottom: 1px solid rgba(0,0,0,0.2);
-          text-transform: none;
-          font-family: 'Noto Sans', sans-serif;
-          font-style: italic;
+        .reply-stack {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          animation: pop-in 0.3s ease-out;
+          transition: opacity 0.5s ease-out;
+        }
+
+        .reply-stack.fade-out {
+          opacity: 0;
+        }
+
+        .reply-stack:hover .message-bubble {
+          transform: scale(1.05);
+        }
+
+        .original-bubble {
+          background: #888 !important;
+          color: #fff !important;
+          font-size: 11px !important;
+          padding: 4px 10px !important;
+          border-radius: 12px !important;
+          max-width: 150px !important;
+          box-shadow: 2px 2px 0 #000 !important;
+          opacity: 0.9;
+          text-transform: none !important;
+          font-family: 'Noto Sans', sans-serif !important;
+        }
+
+        .reply-connector {
+          width: 2px;
+          height: 8px;
+          background: #FFD700;
+        }
+
+        .reply-bubble {
+          border: 3px solid #FFD700 !important;
+          box-shadow: 4px 4px 0 #FFD700 !important;
         }
 
         .message-bubble:hover {
